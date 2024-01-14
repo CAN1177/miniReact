@@ -113,7 +113,7 @@ function initChildren(fiber) {
     if (index === 0) {
       fiber.child = newFiber;
     } else {
-      prevChild = newFiber;
+      prevChild.sibling = newFiber;
     }
     prevChild = newFiber;
   });
@@ -136,7 +136,7 @@ function performUnitOfWork(fiber) {
   if (fiber.child) {
     return fiber.child;
   }
-  if (workLoop.sibling) {
+  if (fiber.sibling) {
     return fiber.sibling;
   }
   return fiber.parent?.sibling;
