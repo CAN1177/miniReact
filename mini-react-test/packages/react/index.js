@@ -25,9 +25,11 @@ function createElement(type, props, ...children) {
     props: {
       ...props,
       // 为了createElement('div', { id: 'container' }, '21silva-miniReact second')直接传值，而不是createElement('div', { id: 'container' }, createTextNode('21silva-miniReact second'))这样
-      children: children.map((child) =>
-        typeof child === "string" ? createTextNode(child) : child
-      ),
+      children: children.map((child) => {
+        return typeof child === "number" || typeof child === "string"
+          ? createTextNode(child)
+          : child;
+      }),
     },
   };
 }
@@ -59,14 +61,14 @@ function workLoop(deadline) {
   let shouldYield = false;
   while (nextUnitOfWork && !shouldYield) {
     nextUnitOfWork = performUnitOfWork(nextUnitOfWork);
-    // shouldYield = deadline.timeRemaining() < 1;
+    shouldYield = deadline.timeRemaining() < 1;
   }
   // 链表结束 且 确保执行一次，有根的时候执行
   if (!nextUnitOfWork && root) {
     commitRoot();
   }
 
-  // requestIdleCallback(workLoop);
+  requestIdleCallback(workLoop);
 }
 
 function commitRoot() {
@@ -79,9 +81,20 @@ function commitWork(fiber) {
   if (!fiber) {
     return;
   }
-  const domParent = fiber.parent.dom;
-  // 当前的dom 添加到父级dom里
-  domParent.append(fiber.dom);
+
+  let fiberParent = fiber.parent;
+  // 这里就是 function component ， 没dom, 那么就继续向上👆, 所以这里应该是while,避免多个FC component
+  while (!fiberParent.dom) {
+    fiberParent = fiberParent.parent;
+  }
+
+  const domParent = fiberParent.dom;
+  // fiber.dom存在的时候再去添加，去除FC的情况，因为FC 的 fiber.dom 是null
+  if (fiber.dom) {
+    // 当前的dom 添加到父级dom里
+    domParent.append(fiber.dom);
+  }
+
   // 递归子节点
   commitWork(fiber.child);
   // 递归兄弟节点
@@ -106,8 +119,8 @@ function updateProps(dom, props) {
   });
 }
 
-function initChildren(fiber) {
-  const children = fiber.props.children || [];
+function initChildren(fiber, children) {
+  // const children = fiber.props.children || [];
   let prevChild = null;
   children.forEach((child, index) => {
     const newFiber = {
@@ -129,28 +142,61 @@ function initChildren(fiber) {
   });
 }
 
-function performUnitOfWork(fiber) {
-  // 判断dom存在不，不存在再去create
-  if (!fiber.dom) {
-    // c dom
-    const dom = (fiber.dom = createDom(fiber.type));
-    // fiber.parent.dom.append(dom);
+function updateHostText(fiber) {
+  // 区分是否是 function component，是的话，包装为数组【】
+  // [fiber.type(fiber.props)] 中的 fiber.props 为实现 FC 的props 传递
+  const children = fiber.props.children || [];
+  // 转换： DOM tree -> 链表，遵循DFS+BFS递归
+  initChildren(fiber, children);
+}
 
-    // update  props
-    updateProps(dom, fiber.props);
-  }
+function updateFunctionComponent(fiber) {
+  const children = [fiber.type(fiber.props)];
 
   // 转换： DOM tree -> 链表，遵循DFS+BFS递归
-  initChildren(fiber);
+  initChildren(fiber, children);
+}
 
-  // 继续执行
+function performUnitOfWork(fiber) {
+  const isFunctionComponent = typeof fiber.type === "function";
+
+  // 不是 isFunctionComponent 是再去 c dom
+  if (!isFunctionComponent) {
+    // 判断dom存在不，不存在再去create
+    if (!fiber.dom) {
+      // c dom
+      const dom = (fiber.dom = createDom(fiber.type));
+      // fiber.parent.dom.append(dom);
+
+      // update  props
+      updateProps(dom, fiber.props);
+    }
+  } 
+  if (isFunctionComponent) {
+    updateFunctionComponent(fiber)
+  } else {
+    updateHostText(fiber);
+  }
+
+  // // 区分是否是 function component，是的话，包装为数组【】
+  // // [fiber.type(fiber.props)] 中的 fiber.props 为实现 FC 的props 传递
+  // const children = isFunctionComponent
+  //   ? [fiber.type(fiber.props)]
+  //   : fiber.props.children || [];
+  // // 转换： DOM tree -> 链表，遵循DFS+BFS递归
+  // initChildren(fiber, children);
+
+  // 继续执行下一个返回的任务
   if (fiber.child) {
     return fiber.child;
   }
-  if (fiber.sibling) {
-    return fiber.sibling;
+  let nextFiber = fiber;
+  // while 处理sibling 时的情况，有sibling 时返回sibling，没有则返回 parent
+  while (nextFiber) {
+    if (nextFiber.sibling) return nextFiber.sibling;
+    nextFiber = nextFiber.parent;
   }
-  return fiber.parent?.sibling;
+  // return fiber.parent?.sibling;
 }
 
 requestIdleCallback(workLoop);
