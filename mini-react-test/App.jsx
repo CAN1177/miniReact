@@ -1,9 +1,18 @@
 import React from "./packages/react/index.js";
 
+
+// function deepNode(num) {
+//   if (num === 1) {
+//     return "1";
+//   } else {
+//     return deepNode(num - 1) + "," + num;
+//   }
+// }
+
 // const App = React.createElement(
 //   "div",
 //   { id: "container" },
-//   "21silva-miniReact second"
+//   deepNode(5000)
 // );
 
 const App = <div>21silva-miniReact hello world

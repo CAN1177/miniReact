@@ -44,23 +44,11 @@ function render(el, container) {
       children: [el],
     },
   };
-  //  const dom = el.type ===
-  // 	 'TEXT_ELEMENT' ? document.createTextNode('') : document.createElement(el.type)
-
-  //  // 处理class
-  //  Object.keys(el.props).forEach((key) => {
-  // 	 if (key !== 'children') {
-  // 		 dom[key] = el.props[key]
-  // 	 }
-  //  })
-
-  //  // 处理子节点
-  //  const children = el.props.children || []
-  //  children.forEach(child => render(child, dom))
-
-  //  // 添加给容器
-  //  container.append(dom)
+  // 确定根节点 root
+  root = nextUnitOfWork;
 }
+
+let root = null;
 
 /**
  * workLoop 完整的工作循环
@@ -71,24 +59,46 @@ function workLoop(deadline) {
   let shouldYield = false;
   while (nextUnitOfWork && !shouldYield) {
     nextUnitOfWork = performUnitOfWork(nextUnitOfWork);
+    // shouldYield = deadline.timeRemaining() < 1;
   }
+  // 链表结束 且 确保执行一次，有根的时候执行
+  if (!nextUnitOfWork && root) {
+    commitRoot();
+  }
+
+  // requestIdleCallback(workLoop);
+}
+
+function commitRoot() {
+  commitWork(root.child);
+  // 确保执行一次，有根的时候执行，这里就重置为null
+  root = null;
+}
+
+function commitWork(fiber) {
+  if (!fiber) {
+    return;
+  }
+  const domParent = fiber.parent.dom;
+  // 当前的dom 添加到父级dom里
+  domParent.append(fiber.dom);
+  // 递归子节点
+  commitWork(fiber.child);
+  // 递归兄弟节点
+  commitWork(fiber.sibling);
 }
 
 /**
  *
- * @param {*} fiber
+ * @param {*} type
  */
-function createDom(fiber) {
-  const { type } = fiber;
-  const dom = (fiber.dom =
-    type === "TEXT_ELEMENT"
-      ? document.createTextNode("")
-      : document.createElement(type));
-  fiber.parent.dom.append(dom);
+function createDom(type) {
+  return type === "TEXT_ELEMENT"
+    ? document.createTextNode("")
+    : document.createElement(type);
 }
 
-function updateProps(fiber) {
-  const { dom, props } = fiber;
+function updateProps(dom, props) {
   Object.keys(props).forEach((key) => {
     if (key !== "children") {
       dom[key] = props[key];
@@ -123,10 +133,11 @@ function performUnitOfWork(fiber) {
   // 判断dom存在不，不存在再去create
   if (!fiber.dom) {
     // c dom
-    createDom(fiber);
+    const dom = (fiber.dom = createDom(fiber.type));
+    // fiber.parent.dom.append(dom);
 
     // update  props
-    updateProps(fiber);
+    updateProps(dom, fiber.props);
   }
 
   // 转换： DOM tree -> 链表，遵循DFS+BFS递归
