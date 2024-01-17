@@ -22,8 +22,9 @@ function MyComponent({ num }) {
   return <div style="color: skyblue">Manchester City Player No.{num}</div>;
 }
 
+let count = 2000;
 const App = () => {
-  let count = 2000;
+  // let count = 2000;
 
   const handleClick = () => {
     console.log("clicked");

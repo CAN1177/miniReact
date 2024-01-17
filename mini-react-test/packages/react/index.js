@@ -36,31 +36,31 @@ function createElement(type, props, ...children) {
  * @param {*} container
  */
 function render(el, container) {
-  nextUnitOfWork = {
+  wipRoot = {
     dom: container,
     props: {
       children: [el],
     },
   };
-  // 确定根节点 root
-  root = nextUnitOfWork;
+  // 确定根节点 wipRoot
+  nextUnitOfWork = wipRoot;
 }
 
 function updateFn() {
-  nextUnitOfWork = {
+  wipRoot = {
     dom: currentRoot.dom,
     props: currentRoot.props,
     alternate: currentRoot,
   };
-  // 确定根节点 root
-  root = nextUnitOfWork;
+  // 确定根节点 wipRoot
+  nextUnitOfWork = wipRoot;
 }
 
 /**
  * workLoop 完整的工作循环
  * 源码：也就是DFS遍历ReactElement的过程，其中递阶段对应beginWork方法， 归阶段对应completeWork方法
  */
-let root = null;
+let wipRoot = null;
 let currentRoot = null;
 let nextUnitOfWork = null;
 function workLoop(deadline) {
@@ -70,7 +70,7 @@ function workLoop(deadline) {
     shouldYield = deadline.timeRemaining() < 1;
   }
   // 链表结束 且 确保执行一次，有根的时候执行
-  if (!nextUnitOfWork && root) {
+  if (!nextUnitOfWork && wipRoot) {
     commitRoot();
   }
 
@@ -78,11 +78,11 @@ function workLoop(deadline) {
 }
 
 function commitRoot() {
-  commitWork(root.child);
+  commitWork(wipRoot.child);
   // 获取最新根节点
-  currentRoot = root;
+  currentRoot = wipRoot;
   // 确保执行一次，有根的时候执行，这里就重置为null
-  root = null;
+  wipRoot = null;
 }
 
 function commitWork(fiber) {
@@ -131,7 +131,7 @@ function createDom(type) {
  * @param {*} oldProps
  */
 function updateProps(dom, newProps, oldProps) {
-  // 1、old have new 没有
+  // 1、old have new no
   Object.keys(oldProps).forEach((key) => {
     if (key !== "children") {
       if (!(key in newProps)) {
@@ -161,7 +161,7 @@ function updateProps(dom, newProps, oldProps) {
   });
 }
 
-function initChildren(fiber, children) {
+function reconcileChildren(fiber, children) {
   let oldFiberNode = fiber.alternate?.child;
   let prevChild = null;
 
@@ -213,14 +213,14 @@ function updateHostText(fiber) {
   // [fiber.type(fiber.props)] 中的 fiber.props 为实现 FC 的props 传递
   const children = fiber.props.children || [];
   // 转换： DOM tree -> 链表，遵循DFS递归
-  initChildren(fiber, children);
+  reconcileChildren(fiber, children);
 }
 
 function updateFunctionComponent(fiber) {
   const children = [fiber.type(fiber.props)];
 
   // 转换： DOM tree -> 链表，遵循DFS递归
-  initChildren(fiber, children);
+  reconcileChildren(fiber, children);
 }
 
 function performUnitOfWork(fiber) {
