@@ -1,7 +1,3 @@
-/**
- * 引入vdom
- * */
-
 // 创建文本节点
 function createTextNode(text) {
   return {
@@ -50,12 +46,22 @@ function render(el, container) {
   root = nextUnitOfWork;
 }
 
-let root = null;
+function updateFn() {
+  nextUnitOfWork = {
+    dom: currentRoot.dom,
+    props: currentRoot.props,
+    alternate: currentRoot,
+  };
+  // 确定根节点 root
+  root = nextUnitOfWork;
+}
 
 /**
  * workLoop 完整的工作循环
  * 源码：也就是DFS遍历ReactElement的过程，其中递阶段对应beginWork方法， 归阶段对应completeWork方法
  */
+let root = null;
+let currentRoot = null;
 let nextUnitOfWork = null;
 function workLoop(deadline) {
   let shouldYield = false;
@@ -73,6 +79,8 @@ function workLoop(deadline) {
 
 function commitRoot() {
   commitWork(root.child);
+  // 获取最新根节点
+  currentRoot = root;
   // 确保执行一次，有根的时候执行，这里就重置为null
   root = null;
 }
@@ -88,11 +96,16 @@ function commitWork(fiber) {
     fiberParent = fiberParent.parent;
   }
 
-  const domParent = fiberParent.dom;
-  // fiber.dom存在的时候再去添加，去除FC的情况，因为FC 的 fiber.dom 是null
-  if (fiber.dom) {
-    // 当前的dom 添加到父级dom里
-    domParent.append(fiber.dom);
+  // 处理不同effectTag情况
+  if (fiber.effectTag === "UPDATE" && fiber.dom) {
+    updateProps(fiber.dom, fiber.props, fiber.alternate?.props);
+  } else if (fiber.effectTag === "PLACEMENT" && fiber.dom) {
+    const domParent = fiberParent.dom;
+    // fiber.dom存在的时候再去添加，去除FC的情况，因为FC 的 fiber.dom 是null
+    if (fiber.dom) {
+      // 当前的dom 添加到父级dom里
+      domParent.append(fiber.dom);
+    }
   }
 
   // 递归子节点
@@ -111,26 +124,79 @@ function createDom(type) {
     : document.createElement(type);
 }
 
-function updateProps(dom, props) {
-  Object.keys(props).forEach((key) => {
+/**
+ * 处理更新，分不同对比情况
+ * @param {*} dom
+ * @param {*} newProps
+ * @param {*} oldProps
+ */
+function updateProps(dom, newProps, oldProps) {
+  // 1、old have new 没有
+  Object.keys(oldProps).forEach((key) => {
     if (key !== "children") {
-      dom[key] = props[key];
+      if (!(key in newProps)) {
+        // removeAttribute() 从指定的元素中删除一个属性
+        dom.removeAttribute(key);
+      }
+    }
+  });
+
+  //2、new have old no , new have old have、
+  Object.keys(newProps).forEach((key) => {
+    if (key !== "children") {
+      if (key !== oldProps[key]) {
+        // 监听点击事件
+        if (key.startsWith("on")) {
+          console.warn("%c Line:115 🥑 key", "color:#fca650", key); // onClick
+          const eventType = key.toLowerCase().substring(2); // click
+          console.warn("%c Line:116 🍌 eventType", "color:#f5ce50", eventType);
+          // 删除之前的旧的dom 因为更新每次都是新创建的
+          dom.removeEventListener(eventType, oldProps[key]);
+          dom.addEventListener(eventType, newProps[key]);
+        } else {
+          dom[key] = newProps[key];
+        }
+      }
     }
   });
 }
 
 function initChildren(fiber, children) {
-  // const children = fiber.props.children || [];
+  let oldFiberNode = fiber.alternate?.child;
   let prevChild = null;
+
   children.forEach((child, index) => {
-    const newFiber = {
-      type: child.type,
-      props: child.props,
-      parent: fiber,
-      dom: null,
-      child: null,
-      sibling: null,
-    };
+    let newFiber;
+    const isSameType = oldFiberNode && child.type === oldFiberNode.type;
+    if (isSameType) {
+      // effectTag update
+      newFiber = {
+        type: child.type,
+        props: child.props,
+        parent: fiber,
+        dom: oldFiberNode.dom,
+        child: null,
+        sibling: null,
+        effectTag: "UPDATE",
+        alternate: oldFiberNode,
+      };
+    } else {
+      // effectTag placement
+      newFiber = {
+        type: child.type,
+        props: child.props,
+        parent: fiber,
+        dom: null,
+        child: null,
+        sibling: null,
+        effectTag: "PLACEMENT",
+      };
+    }
+
+    // （多个child节点）首先检查 oldFiberNode 是否存在，如果存在的话，将其更新为 oldFiberNode 的兄弟节点。这样，我们就可以不断地更新 oldFiberNode，直到它不再有兄弟节点。这时，我们就完成了状态节点的更新
+    if (oldFiberNode) {
+      oldFiberNode = oldFiberNode.sibling;
+    }
 
     // 根结点的第一个子节点
     if (index === 0) {
@@ -146,14 +212,14 @@ function updateHostText(fiber) {
   // 区分是否是 function component，是的话，包装为数组【】
   // [fiber.type(fiber.props)] 中的 fiber.props 为实现 FC 的props 传递
   const children = fiber.props.children || [];
-  // 转换： DOM tree -> 链表，遵循DFS+BFS递归
+  // 转换： DOM tree -> 链表，遵循DFS递归
   initChildren(fiber, children);
 }
 
 function updateFunctionComponent(fiber) {
   const children = [fiber.type(fiber.props)];
 
-  // 转换： DOM tree -> 链表，遵循DFS+BFS递归
+  // 转换： DOM tree -> 链表，遵循DFS递归
   initChildren(fiber, children);
 }
 
@@ -169,22 +235,14 @@ function performUnitOfWork(fiber) {
       // fiber.parent.dom.append(dom);
 
       // update  props
-      updateProps(dom, fiber.props);
+      updateProps(dom, fiber.props, {});
     }
-  } 
+  }
   if (isFunctionComponent) {
-    updateFunctionComponent(fiber)
+    updateFunctionComponent(fiber);
   } else {
     updateHostText(fiber);
   }
-
-  // // 区分是否是 function component，是的话，包装为数组【】
-  // // [fiber.type(fiber.props)] 中的 fiber.props 为实现 FC 的props 传递
-  // const children = isFunctionComponent
-  //   ? [fiber.type(fiber.props)]
-  //   : fiber.props.children || [];
-  // // 转换： DOM tree -> 链表，遵循DFS+BFS递归
-  // initChildren(fiber, children);
 
   // 继续执行下一个返回的任务
   if (fiber.child) {
@@ -203,6 +261,7 @@ requestIdleCallback(workLoop);
 
 // 导出React
 const React = {
+  updateFn,
   render,
   createElement,
 };

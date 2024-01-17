@@ -23,12 +23,22 @@ function MyComponent({ num }) {
 }
 
 const App = () => {
+  let count = 2000;
+
+  const handleClick = () => {
+    console.log("clicked");
+    count++;
+    React.updateFn();
+  };
+
   return (
     <div>
       <h1>Welcome to Etihad Stadium</h1>
       <ManCity num={21} />
       <ManCity num={17} />
       <span>Legendary Player</span>
+
+      <button onClick={handleClick}>clicked{count}</button>
     </div>
   );
 };
