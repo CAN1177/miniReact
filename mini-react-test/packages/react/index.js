@@ -47,13 +47,23 @@ function render(el, container) {
 }
 
 function updateFn() {
-  wipRoot = {
-    dom: currentRoot.dom,
-    props: currentRoot.props,
-    alternate: currentRoot,
+  console.warn(wipFiber);
+  let currentFiber = wipFiber;
+
+  return () => {
+    console.warn("%c Line:55 🧀 currentFiber", "color:#b03734", currentFiber);
+    wipRoot = {
+      ...currentFiber,
+      alternate: currentFiber,
+    };
+    // wipRoot = {
+    //   dom: currentRoot.dom,
+    //   props: currentRoot.props,
+    //   alternate: currentRoot,
+    // };
+    // 确定根节点 wipRoot
+    nextUnitOfWork = wipRoot;
   };
-  // 确定根节点 wipRoot
-  nextUnitOfWork = wipRoot;
 }
 
 /**
@@ -63,10 +73,20 @@ function updateFn() {
 let wipRoot = null;
 let currentRoot = null;
 let nextUnitOfWork = null;
+let deletionsNode = [];
+
+// 正在进行中的节点
+let wipFiber = null;
 function workLoop(deadline) {
   let shouldYield = false;
   while (nextUnitOfWork && !shouldYield) {
     nextUnitOfWork = performUnitOfWork(nextUnitOfWork);
+
+    if (wipRoot?.sibling?.type === nextUnitOfWork?.type) {
+      console.log("%c Line:87 🧀", "color:#6ec1c2", "9999");
+      nextUnitOfWork = undefined;
+    }
+
     shouldYield = deadline.timeRemaining() < 1;
   }
   // 链表结束 且 确保执行一次，有根的时候执行
@@ -78,11 +98,31 @@ function workLoop(deadline) {
 }
 
 function commitRoot() {
+  // 统一处理
+  deletionsNode.forEach(commitDeletions);
+  deletionsNode = [];
+
   commitWork(wipRoot.child);
   // 获取最新根节点
   currentRoot = wipRoot;
   // 确保执行一次，有根的时候执行，这里就重置为null
   wipRoot = null;
+}
+
+function commitDeletions(fiber) {
+  // 不满足function component
+  // fiber.parent.dom.removeChild(fiber.dom);
+
+  if (fiber.dom) {
+    let fiberParent = fiber.parent;
+    // 这里就是 function component ， 没dom, 那么就继续向上👆, 所以这里应该是while,避免多个FC component
+    while (!fiberParent.dom) {
+      fiberParent = fiberParent.parent;
+    }
+    fiberParent.dom.removeChild(fiber.dom);
+  } else {
+    commitDeletions(fiber.child);
+  }
 }
 
 function commitWork(fiber) {
@@ -147,9 +187,9 @@ function updateProps(dom, newProps, oldProps) {
       if (key !== oldProps[key]) {
         // 监听点击事件
         if (key.startsWith("on")) {
-          console.warn("%c Line:115 🥑 key", "color:#fca650", key); // onClick
+          // console.warn("%c Line:115 🥑 key", "color:#fca650", key); // onClick
           const eventType = key.toLowerCase().substring(2); // click
-          console.warn("%c Line:116 🍌 eventType", "color:#f5ce50", eventType);
+          // console.warn("%c Line:116 🍌 eventType", "color:#f5ce50", eventType);
           // 删除之前的旧的dom 因为更新每次都是新创建的
           dom.removeEventListener(eventType, oldProps[key]);
           dom.addEventListener(eventType, newProps[key]);
@@ -181,16 +221,21 @@ function reconcileChildren(fiber, children) {
         alternate: oldFiberNode,
       };
     } else {
-      // effectTag placement
-      newFiber = {
-        type: child.type,
-        props: child.props,
-        parent: fiber,
-        dom: null,
-        child: null,
-        sibling: null,
-        effectTag: "PLACEMENT",
-      };
+      if (child) {
+        // effectTag placement
+        newFiber = {
+          type: child.type,
+          props: child.props,
+          parent: fiber,
+          dom: null,
+          child: null,
+          sibling: null,
+          effectTag: "PLACEMENT",
+        };
+      }
+      if (oldFiberNode) {
+        deletionsNode.push(oldFiberNode);
+      }
     }
 
     // （多个child节点）首先检查 oldFiberNode 是否存在，如果存在的话，将其更新为 oldFiberNode 的兄弟节点。这样，我们就可以不断地更新 oldFiberNode，直到它不再有兄弟节点。这时，我们就完成了状态节点的更新
@@ -204,8 +249,21 @@ function reconcileChildren(fiber, children) {
     } else {
       prevChild.sibling = newFiber;
     }
-    prevChild = newFiber;
+
+    // 解决case 处理顺序
+    // console.log("%c Line:236 🍰 newFiber", "color:#e41a6a", newFiber);
+
+    if (newFiber) {
+      prevChild = newFiber;
+    }
   });
+
+  // 删除多余子节点
+  while (oldFiberNode) {
+    deletionsNode.push(oldFiberNode);
+    // 更新（因为链表）
+    oldFiberNode = oldFiberNode.sibling;
+  }
 }
 
 function updateHostText(fiber) {
@@ -217,6 +275,8 @@ function updateHostText(fiber) {
 }
 
 function updateFunctionComponent(fiber) {
+  // 正在进行中的节点，需设置全局变量保存
+  wipFiber = fiber;
   const children = [fiber.type(fiber.props)];
 
   // 转换： DOM tree -> 链表，遵循DFS递归
