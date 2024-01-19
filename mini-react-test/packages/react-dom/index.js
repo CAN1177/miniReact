@@ -1,4 +1,4 @@
-import React from '../react/index.js'
+import React from '../react/index2.js'
 
 const ReactDOM = {
   createRoot(container) {
