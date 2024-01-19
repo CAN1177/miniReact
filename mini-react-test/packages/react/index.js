@@ -56,13 +56,9 @@ function updateFn() {
       ...currentFiber,
       alternate: currentFiber,
     };
-    // wipRoot = {
-    //   dom: currentRoot.dom,
-    //   props: currentRoot.props,
-    //   alternate: currentRoot,
-    // };
     // 确定根节点 wipRoot
     nextUnitOfWork = wipRoot;
+
   };
 }
 
@@ -82,7 +78,7 @@ function workLoop(deadline) {
   while (nextUnitOfWork && !shouldYield) {
     nextUnitOfWork = performUnitOfWork(nextUnitOfWork);
 
-    if (wipRoot?.sibling?.type === nextUnitOfWork?.type) {
+    if ( wipRoot && wipRoot.sibling?.type === nextUnitOfWork?.type) {
       console.log("%c Line:87 🧀", "color:#6ec1c2", "9999");
       nextUnitOfWork = undefined;
     }
@@ -138,7 +134,7 @@ function commitWork(fiber) {
 
   // 处理不同effectTag情况
   if (fiber.effectTag === "UPDATE" && fiber.dom) {
-    updateProps(fiber.dom, fiber.props, fiber.alternate?.props);
+    updateProps(fiber.dom, fiber?.props, fiber.alternate?.props);
   } else if (fiber.effectTag === "PLACEMENT" && fiber.dom) {
     const domParent = fiberParent.dom;
     // fiber.dom存在的时候再去添加，去除FC的情况，因为FC 的 fiber.dom 是null
@@ -171,12 +167,17 @@ function createDom(type) {
  * @param {*} oldProps
  */
 function updateProps(dom, newProps, oldProps) {
+  console.log("%c Line:174 🍇 newProps", "color:#3f7cff", newProps);
   // 1、old have new no
   Object.keys(oldProps).forEach((key) => {
     if (key !== "children") {
       if (!(key in newProps)) {
-        // removeAttribute() 从指定的元素中删除一个属性
-        dom.removeAttribute(key);
+        if (key.startsWith('on')) {
+          const eventType = key.substring(2).toLowerCase()
+          dom.removeEventListener(eventType, oldProps[key])
+        } else {
+          dom.removeAttribute(key)
+        }
       }
     }
   });
@@ -201,7 +202,7 @@ function updateProps(dom, newProps, oldProps) {
   });
 }
 
-function reconcileChildren(fiber, children) {
+function  reconcileChildren(fiber, children) {
   let oldFiberNode = fiber.alternate?.child;
   let prevChild = null;
 
@@ -234,6 +235,7 @@ function reconcileChildren(fiber, children) {
         };
       }
       if (oldFiberNode) {
+        console.log("%c Line:238 🍆 oldFiberNode", "color:#93c0a4", oldFiberNode);
         deletionsNode.push(oldFiberNode);
       }
     }
@@ -295,7 +297,7 @@ function performUnitOfWork(fiber) {
       // fiber.parent.dom.append(dom);
 
       // update  props
-      updateProps(dom, fiber.props, {});
+      updateProps(dom, fiber?.props, {});
     }
   }
   if (isFunctionComponent) {
@@ -319,10 +321,38 @@ function performUnitOfWork(fiber) {
 
 requestIdleCallback(workLoop);
 
+
+
+function useState(initialValue) {
+  
+  let currentFiber = wipFiber;
+  const oldHook =  currentFiber.alternate?.stateHook;
+  const stateHook = {
+    state: oldHook ? oldHook : initialValue
+  }
+
+  currentFiber.stateHook = stateHook
+
+  function setState(action) { 
+
+stateHook.state = action(stateHook.state);
+    wipRoot = {
+      ...currentFiber,
+      alternate: currentFiber,
+    };
+    // 确定根节点 wipRoot
+    nextUnitOfWork = wipRoot;
+  }
+
+  return [stateHook.state, setState];
+}
+
+
 // 导出React
 const React = {
   updateFn,
   render,
   createElement,
+  useState,
 };
 export default React;
