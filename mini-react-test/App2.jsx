@@ -32,15 +32,19 @@ import React from "./packages/react/index2.js";
 // };
 
 let count = 10
-function Counter({ num }) {
+function Counter() {
+  const [count, setCount] = React.useState(1);
+  const [bar, setBar ] = React.useState('6666');
   const handelClick = () => {
     console.log("%c Line:37 🍐", "color:#ed9ec7", "click");
-    count++;
-    React.updateFn()
+    setCount((count) => count + 1);
+    setBar('88888');
   };
 
   return (
     <div>
+      bar:{bar}
+      <br />
       count:{count}
       <button onClick={handelClick}>click</button>
     </div>
@@ -51,6 +55,7 @@ const App2 = () => {
   return (
     <div>
       Hello World
+      <br />
       <Counter num={10} />
     </div>
   );

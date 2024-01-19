@@ -252,24 +252,17 @@ function updateFn() {
       ...currentFiber,
       alternate: currentFiber,
     };
-
-    // wipRoot = {
-    //   dom: currentRoot.dom,
-    //   props: currentRoot.props,
-    //   alternate: currentRoot,
-    // };
-
     nextWorkOfUnit = wipRoot;
   };
 }
 
 let stateHooks;
 let stateHookIndex;
-function useState(initial) {
+function useState(initialValue) {
   let currentFiber = wipFiber;
   const oldHook = currentFiber.alternate?.stateHooks[stateHookIndex];
   const stateHook = {
-    state: oldHook ? oldHook.state : initial,
+    state: oldHook ? oldHook.state : initialValue,
     queue: oldHook ? oldHook.queue : [],
   };
 
@@ -278,13 +271,14 @@ function useState(initial) {
   });
 
   stateHook.queue = [];
-
+ 
   stateHookIndex++;
   stateHooks.push(stateHook);
 
   currentFiber.stateHooks = stateHooks;
 
   function setState(action) {
+    // 及早求值 eagerState
     const eagerState =
       typeof action === "function" ? action(stateHook.state) : action;
 
