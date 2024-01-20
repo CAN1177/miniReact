@@ -30,16 +30,35 @@ import React from "./packages/react/index2.js";
 //     </div>
 //   );
 // };
+const { useEffect } = React;
 
-let count = 10
+let count = 10;
 function Counter() {
   const [count, setCount] = React.useState(1);
-  const [bar, setBar ] = React.useState('6666');
+  const [bar, setBar] = React.useState("6666");
   const handelClick = () => {
     console.log("%c Line:37 🍐", "color:#ed9ec7", "click");
     setCount((count) => count + 1);
-    setBar('88888');
+    setBar("88888");
   };
+
+  useEffect(() => {
+    console.log("%c Line:42 🍐", "color:#ed9ec7", "initial");
+    return () => {
+      console.log(
+        "%c Line:42 🍐",
+        "color:#ed9ec7",
+        "useEffect destroy initial"
+      );
+    };
+  }, []);
+
+  useEffect(() => {
+    console.log("%c Line:42 🍐", "color:#ed9ec7", "useEffect update");
+    return () => {
+      console.log("%c Line:42 🍐", "color:#ed9ec7", "useEffect destroy update");
+    };
+  }, [count]);
 
   return (
     <div>

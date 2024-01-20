@@ -60,9 +60,52 @@ function workLoop(deadline) {
 function commitRoot() {
   deletions.forEach(commitDeletion);
   commitWork(wipRoot.child);
+  commitEffectHooks();
   currentRoot = wipRoot;
   wipRoot = null;
   deletions = [];
+}
+
+function commitEffectHooks() {
+  function executeEffect(fiber) {
+    if (!fiber) return;
+
+    if (!fiber.alternate) {
+      // initial
+      fiber.effectHooks?.forEach((effectHook) => {
+        effectHook.cleanUp =  effectHook.callback();
+      });
+      // fiber.effectHook?.callback();
+    } else {
+      // update
+
+   
+      fiber.effectHooks?.forEach((newHook, index) => {
+        if (!(newHook.dependencies.length > 0)) return;
+        const oldEffectHook = fiber.alternate?.effectHooks[index];
+        const needUpdate = oldEffectHook?.dependencies.some((oldDep, oldIndex) => {
+          return oldDep !== newHook.dependencies[oldIndex];
+        });
+
+        needUpdate && (newHook.cleanUp = newHook?.callback());
+      });
+    }
+    executeEffect(fiber.child);
+    executeEffect(fiber.sibling);
+  }
+
+  function executeCleanUp(fiber) {
+    if (!fiber) return
+    
+    fiber.alternate?.effectHooks?.forEach((hook) => {
+      if (!(hook.dependencies.length > 0))  return;
+      hook?.cleanUp?.();
+    })
+    executeCleanUp(fiber.child)
+    executeCleanUp(fiber.sibling)
+  }
+  executeCleanUp(wipRoot)
+  executeEffect(wipRoot);
 }
 
 function commitDeletion(fiber) {
@@ -103,16 +146,6 @@ function createDom(type) {
 }
 
 function updateProps(dom, nextProps, prevProps) {
-  // Object.keys(nextProps).forEach((key) => {
-  //   if (key !== "children") {
-  //     if (key.startsWith("on")) {
-  //       const eventType = key.slice(2).toLowerCase();
-  //       dom.addEventListener(eventType, nextProps[key]);
-  //     } else {
-  //       dom[key] = nextProps[key];
-  //     }
-  //   }
-  // });
   // {id: "1"} {}
   // 1. old 有  new 没有 删除
   Object.keys(prevProps).forEach((key) => {
@@ -202,6 +235,7 @@ function reconcileChildren(fiber, children) {
 
 function updateFunctionComponent(fiber) {
   stateHooks = [];
+  effectHooks = [];
   stateHookIndex = 0;
   wipFiber = fiber;
 
@@ -271,7 +305,7 @@ function useState(initialValue) {
   });
 
   stateHook.queue = [];
- 
+
   stateHookIndex++;
   stateHooks.push(stateHook);
 
@@ -297,9 +331,21 @@ function useState(initialValue) {
   return [stateHook.state, setState];
 }
 
+let effectHooks;
+function useEffect(callback, dependencies) {
+  const effectHook = {
+    callback,
+    dependencies,
+    cleanUp: undefined,
+  };
+  effectHooks.push(effectHook);
+  wipFiber.effectHooks = effectHooks;
+}
+
 const React = {
   updateFn,
   useState,
+  useEffect,
   render,
   createElement,
 };
